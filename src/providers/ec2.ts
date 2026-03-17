@@ -250,6 +250,17 @@ export interface Ec2RunnerProviderProps extends RunnerProviderProps {
   readonly instanceType?: ec2.InstanceType;
 
   /**
+   * Enable nested virtualization (KVM/Hyper-V) on runner instances.
+   *
+   * This maps to EC2 `CpuOptions.NestedVirtualization`.
+   *
+   * Make sure to use an instance type that supports nested virtualization.
+   *
+   * @default undefined - EC2 default behavior
+   */
+  readonly nestedVirtualization?: boolean;
+
+  /**
    * Size of volume available for launched runner instances. This modifies the boot volume size and doesn't add any additional volumes.
    *
    * @default 30GB
@@ -388,6 +399,7 @@ export class Ec2RunnerProvider extends BaseProvider implements IRunnerProvider {
   private readonly instanceType: ec2.InstanceType;
   private readonly storageSize: cdk.Size;
   private readonly storageOptions?: StorageOptions;
+  private readonly nestedVirtualization?: boolean;
   private readonly spot: boolean;
   private readonly spotMaxPrice: string | undefined;
   private readonly vpc: ec2.IVpc;
@@ -404,6 +416,7 @@ export class Ec2RunnerProvider extends BaseProvider implements IRunnerProvider {
     this.securityGroups = props?.securityGroup ? [props.securityGroup] : (props?.securityGroups ?? [new ec2.SecurityGroup(this, 'SG', { vpc: this.vpc })]);
     this.subnets = props?.subnet ? [props.subnet] : this.vpc.selectSubnets(props?.subnetSelection).subnets;
     this.instanceType = props?.instanceType ?? ec2.InstanceType.of(ec2.InstanceClass.M6I, ec2.InstanceSize.LARGE);
+    this.nestedVirtualization = props?.nestedVirtualization;
     this.storageSize = props?.storageSize ?? cdk.Size.gibibytes(30); // 30 is the minimum for Windows
     this.storageOptions = props?.storageOptions;
     this.spot = props?.spot ?? false;
@@ -529,6 +542,9 @@ export class Ec2RunnerProvider extends BaseProvider implements IRunnerProvider {
           },
           MetadataOptions: {
             HttpTokens: 'required',
+          },
+          CpuOptions: this.nestedVirtualization === undefined ? undefined : {
+            NestedVirtualization: this.nestedVirtualization ? 'enabled' : 'disabled',
           },
           SecurityGroupIds: this.securityGroups.map(sg => sg.securityGroupId),
           SubnetId: subnet.subnetId,
